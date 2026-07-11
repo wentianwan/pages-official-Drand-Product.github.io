@@ -592,7 +592,7 @@ document.addEventListener('click', function() {
             });
             initMatrix();
             initTerminal();
-     setInterval(fetchAuthData, 90);
+     setInterval(fetchAuthData, 10000);
             setInterval(() => {
                 if (document.activeElement !== commandInput) {
                     commandInput.focus();
