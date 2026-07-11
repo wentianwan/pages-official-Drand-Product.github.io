@@ -1,1 +1,146 @@
- 
+ {
+  "v": "68",
+  "meta": {
+    "role": "client_validator",
+    "self_domain": "wentianwan.com",
+    "auth_source": "https://www.tianbin.org/api/index.json",
+    "upstream": "https://api.tianbin.net/api/index.json",
+    "retry_interval": 86400,
+    "timeout": 10
+  },
+  "self": {
+    "domain": "wentianwan.com",
+    "official": true,
+    "check": {
+      "token": "20250403T151751",
+      "issued_by": "www.tianbin.org",
+      "ts": "2025-04-03"
+    }
+  },
+  "validation_flow": {
+    "step_1_fetch_auth": {
+      "url": "https://www.tianbin.org/api/index.json",
+      "method": "GET",
+      "timeout": 10,
+      "retry": {
+        "enabled": true,
+        "interval": 86400,
+        "max_retries": -1
+      },
+      "expected_structure": {
+        "v": "string",
+        "site": "tianbin.org",
+        "role": "auth_root",
+        "official_domains": "array",
+        "tokens": "object",
+        "upstream": "string",
+        "ttl": "number"
+      }
+    },
+    "step_2_validate_self": {
+      "checks": [
+        {
+          "type": "field_match",
+          "path": "self.official",
+          "expected": true
+        },
+        {
+          "type": "array_contains",
+          "array_path": "auth.official_domains",
+          "value_path": "self.domain"
+        },
+        {
+          "type": "token_match",
+          "token_path": "auth.tokens.{self.domain}",
+          "expected_path": "self.check.token"
+        }
+      ]
+    },
+    "step_3_connect_upstream": {
+      "condition": "all_checks_pass",
+      "url_path": "upstream",
+      "fallback": {
+        "on_fail": "abort_connection",
+        "on_timeout": "retry_validation"
+      }
+    }
+  },
+  "domains_to_validate": [
+    {
+      "domain": "wentianplay.net",
+      "api_path": "/api/index.json",
+      "priority": 1
+    },
+    {
+      "domain": "wentianwan.com",
+      "api_path": "/api/index.json",
+      "priority": 2
+    },
+    {
+      "domain": "wentianplays.com",
+      "api_path": "/api/index.json",
+      "priority": 3
+    },
+    {
+      "domain": "bintian.net",
+      "api_path": "/api/index.json",
+      "priority": 4
+    },
+    {
+      "domain": "wentianyou.com",
+      "api_path": "/api/index.json",
+      "priority": 5
+    }
+  ],
+  "execution_plan": {
+    "phase_1": {
+      "name": "fetch_auth_root",
+      "action": "fetch_with_retry",
+      "target": "meta.auth_source",
+      "store_as": "auth_data"
+    },
+    "phase_2": {
+      "name": "validate_all_domains",
+      "action": "parallel_validation",
+      "items": "domains_to_validate",
+      "per_item": {
+        "fetch": {
+          "url": "https://{domain}{api_path}",
+          "timeout": 10,
+          "retry_interval": 86400
+        },
+        "validate": {
+          "against": "auth_data",
+          "rules": [
+            "official_flag_true",
+            "domain_in_whitelist",
+            "token_matches"
+          ]
+        }
+      }
+    },
+    "phase_3": {
+      "name": "connect_production_api",
+      "condition": "phase_2.all_passed",
+      "action": "connect",
+      "target": "meta.upstream"
+    }
+  },
+  "response_templates": {
+    "validation_pending": {
+      "status": "pending",
+      "message": "Validating domain authenticity...",
+      "next_check": 10
+    },
+    "validation_success": {
+      "status": "verified",
+      "message": "Official domain verified ✓",
+      "connected_to": "https://api.tianbin.net/api/index.json"
+    },
+    "validation_failed": {
+      "status": "failed",
+      "message": "Domain verification failed ✗",
+      "reason": "Not in official whitelist or token mismatch"
+    }
+  }
+}
